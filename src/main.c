@@ -268,12 +268,18 @@ int main (int argc, char *argv[]) {
   printf("Output: %s\n", cc_options.output_file);
   printf("IR: %s\n", cc_options.ir_file);
   yyin=fopen(cc_options.input_file,"r");
+  anzFehler = 0;
   global = NULL;
   fglobal = NULL;
+  scope = NULL;
+  aktuelleListe = NULL;
   yyparse();
   gebeGlobaleVariablenAus();
   gebeFunktionenAus();
   rm_cleanup_resources(&resource_mgr);
+  if (anzFehler > 0 ) {
+	  return 1;
+  }
   return 0;
 }
 

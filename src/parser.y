@@ -14,7 +14,8 @@
   variableDefinition *varDef;
   variableIdentifikation *varID;
   variablen *vliste;
-  int fnct_typ=-1;
+  int fnct_typ;
+  funktionen *fnct;
 }
  
 // Verbose error messages
@@ -65,11 +66,12 @@
 %left MUL DIV MOD
 %right LOGICAL_NOT UNARY_MINUS UNARY_PLUS
 
-%type <i> type expression NUM
-%type <varDef> variable_declaration function_parameter stmt
+%type <i> type NUM
+%type <varDef> variable_declaration function_parameter stmt expression primary function_call
 %type <varID> identifier_declaration
 %type <id> ID
-%type <vliste> function_parameter_list stmt_list stmt_block
+%type <vliste> function_parameter_list stmt_list stmt_block function_call_parameters
+%type <fnct> function_start
 %%
 
 program
@@ -82,7 +84,7 @@ program_element_list
      ;
 
 program_element
-     : variable_declaration SEMICOLON { integriereVariableGlobal($1); }
+     : variable_declaration SEMICOLON { integriereVariableGlobal($1,@$); }
      | function_declaration SEMICOLON
      | function_definition
      | SEMICOLON
@@ -104,18 +106,22 @@ identifier_declaration
      ;
 
 function_definition
-     : type ID PARA_OPEN PARA_CLOSE BRACE_OPEN stmt_list BRACE_CLOSE { fnct_typ = $1; integriereFunktion($1,$2,NULL,$6,DEFINIERT); }
-     | type ID PARA_OPEN function_parameter_list PARA_CLOSE BRACE_OPEN stmt_list BRACE_CLOSE { fnct_typ = $1; integriereFunktion($1,$2,$4,$7,DEFINIERT); }
+     : function_start PARA_CLOSE BRACE_OPEN stmt_list BRACE_CLOSE { integriereFunktion($1,NULL,$4,DEFINIERT,@$); scope = NULL; }
+     | function_start function_parameter_list PARA_CLOSE BRACE_OPEN stmt_list BRACE_CLOSE { integriereFunktion($1,$2,$5,DEFINIERT,@$); scope = NULL; }
      ;
 
 function_declaration
-     : type ID PARA_OPEN PARA_CLOSE { integriereFunktion($1,$2,NULL,NULL,UNDEFINIERT); }
-     | type ID PARA_OPEN function_parameter_list PARA_CLOSE { integriereFunktion($1,$2,$4,NULL,UNDEFINIERT); }
+     : function_start PARA_CLOSE { integriereFunktion($1,NULL,NULL,UNDEFINIERT,@$); scope = NULL; }
+     | function_start function_parameter_list PARA_CLOSE { integriereFunktion($1,$2,NULL,UNDEFINIERT,@$); scope = NULL; }
+     ;
+
+function_start
+     : type ID PARA_OPEN { scope = $2; $$ = makeFunc($1,$2); } 
      ;
 
 function_parameter_list
-     : function_parameter { $$ = integriereVariable($1,NULL); }
-     | function_parameter_list COMMA function_parameter { $$ = integriereVariable($3,$1); }
+     : function_parameter { $$ = integriereVariable($1,NULL,@$); }
+     | function_parameter_list COMMA function_parameter { $$ = integriereVariable($3,$1,@$); }
      ;
 	
 function_parameter
@@ -124,7 +130,7 @@ function_parameter
 									
 stmt_list
      : /* empty: epsilon */ { $$ = NULL; }
-     | stmt_list stmt { $$ = integriereVariable($2,$1); }
+     | stmt_list stmt { $$ = integriereVariable($2,$1,@$); }
      ;
 
 stmt
@@ -174,23 +180,23 @@ expression
      | PLUS expression %prec UNARY_PLUS
      | ID BRACKET_OPEN primary BRACKET_CLOSE
      | PARA_OPEN expression PARA_CLOSE
-     | function_call
-     | primary
+     | function_call { $$ = $1; }
+     | primary { $$ = $1; }
      ;
 
 primary
-     : NUM
-     | ID
+     : NUM { $$ = newInt($1); } 
+     | ID { $$ = getVar($1,@$); }
      ;
 
 function_call
-      : ID PARA_OPEN PARA_CLOSE
-      | ID PARA_OPEN function_call_parameters PARA_CLOSE
+      : ID PARA_OPEN PARA_CLOSE { $$ = suchFunktionTyp($1,NULL,@$); } 
+      | ID PARA_OPEN function_call_parameters PARA_CLOSE { $$ = suchFunktionTyp($1,$3,@$); } 
       ;
 
 function_call_parameters
-     : function_call_parameters COMMA expression
-     | expression
+     : function_call_parameters COMMA expression { $$ = addToVarList($3,$1,@$); }
+     | expression { $$ = addToVarList($1,NULL,@$); }
      ;
 
 %%
@@ -198,4 +204,5 @@ function_call_parameters
 void yyerror (const char *msg)
 {
 	FATAL_COMPILER_ERROR(INVALID_SYNTAX, 1, "(%d.%d-%d.%d): %s\n", yylloc.first_line, yylloc.first_column, yylloc.last_line, yylloc.last_column, msg);
+	anzFehler++;
 }

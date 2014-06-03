@@ -5,6 +5,13 @@
 %{
 	#include "symboltabelle.h"
 	#include "parser.y.h"
+	int yycolumn = 1;
+	#define YY_USER_ACTION { \
+			yylloc.first_line = yylineno; \
+			yylloc.last_line = yylineno; \
+			yylloc.first_column = yycolumn; \
+			yylloc.last_column = yycolumn + yyleng - 1; \
+			yycolumn += yyleng; }
 %}
 
 /* 
@@ -20,6 +27,7 @@
 %option noyywrap		
 
 %%
+\n { yycolumn = 1; }
 \/\/[[:print:]]{-}[\n]*[\n]
 do { return DO; }
 while { return WHILE; }
@@ -57,4 +65,3 @@ return { return RETURN; }
 \% { return MOD; }
 \! { return LOGICAL_NOT; }
 . { }
-[\n] { }
